@@ -12,10 +12,6 @@ const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
 const DISCORD_CHANNEL_ID = process.env.DISCORD_CHANNEL_ID;
 const PORT = process.env.PORT || 3000;
 
-let cachedReviews = [];
-let lastFetch = 0;
-const CACHE_TIME = 60 * 1000;
-
 function getDiscordAvatarUrl(author) {
   if (!author || !author.id || !author.avatar) return null;
 
@@ -82,11 +78,9 @@ function parseReviewMessage(message) {
 
 app.get("/api/reviews", async (req, res) => {
   try {
-    const now = Date.now();
-
-    if (now - lastFetch < CACHE_TIME && cachedReviews.length > 0) {
-      return res.json(cachedReviews);
-    }
+    res.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    res.set("Pragma", "no-cache");
+    res.set("Expires", "0");
 
     if (!DISCORD_BOT_TOKEN || !DISCORD_CHANNEL_ID) {
       return res.status(500).json({
@@ -117,9 +111,6 @@ app.get("/api/reviews", async (req, res) => {
       .map(parseReviewMessage)
       .slice(0, 6);
 
-    cachedReviews = reviews;
-    lastFetch = now;
-
     return res.json(reviews);
   } catch (error) {
     return res.status(500).json({
@@ -130,6 +121,16 @@ app.get("/api/reviews", async (req, res) => {
 
 app.get("/api/debug", async (req, res) => {
   try {
+    res.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    res.set("Pragma", "no-cache");
+    res.set("Expires", "0");
+
+    if (!DISCORD_BOT_TOKEN || !DISCORD_CHANNEL_ID) {
+      return res.status(500).json({
+        error: "Missing Discord bot token or Discord channel ID."
+      });
+    }
+
     const discordUrl = `https://discord.com/api/v10/channels/${DISCORD_CHANNEL_ID}/messages?limit=10`;
 
     const response = await fetch(discordUrl, {
@@ -147,6 +148,7 @@ app.get("/api/debug", async (req, res) => {
       messages: Array.isArray(data)
         ? data.map((msg) => ({
             author: msg.author?.username,
+            bot: msg.author?.bot,
             content: msg.content,
             cleaned: cleanDiscordMessage(msg.content),
             timestamp: msg.timestamp
@@ -161,6 +163,7 @@ app.get("/api/debug", async (req, res) => {
 });
 
 app.get("/", (req, res) => {
+  res.set("Cache-Control", "no-store");
   res.send("Socnfdnt Reviews API is running.");
 });
 
